@@ -1,6 +1,8 @@
+#include<iostream>
 #include"../include/Server.hpp"
 
 using namespace sf;
+using namespace std;
 
 Server::Server() : receivingThread(&Server::receiving, this), sendingThread(&Server::sending, this)
 {
@@ -9,13 +11,16 @@ Server::Server() : receivingThread(&Server::receiving, this), sendingThread(&Ser
 
 	sendingThread.launch();
 	receivingThread.launch();
+
+	cout<<"Server running at port: 9655";
+	cout.flush();
 }
 
 void Server::sending()
 {
 	while(this->running)
 	{
-		//send data to newly connected players
+		//send gamedata to newly connected players
 		if(this->new_players > 0) {
 			Packet packet;
 			for(int i=0; i<this->bases.size(); i++) {
@@ -34,21 +39,23 @@ void Server::sending()
 				while(this->new_players > 0)
 				{
 					User user = this->users[this->users.size()-this->new_players];
+					cout<<endl<<"Sending gamedata to User: "<<user.address<<" to Port: "<<user.port;
+					cout.flush();
 					sendingSocket.send(packet, user.address, user.port);
 					this->new_players--;
 				}
 			}
-		
+		}
+
 		//relay data to all other users
-			for(int i=0; i<this->users.size(); i++) {
-				for(int j=0; j<this->users.size(); j++) {
-					if(j == i) {
+		for(int i=0; i<this->users.size(); i++) {
+			for(int j=0; j<this->users.size(); j++) {
+				if(j == i) {
 						continue;
-					}
-					sendingSocket.send(this->users[i].packet, this->users[j].address, this->users[j].port);
 				}
+				sendingSocket.send(this->users[i].packet, this->users[j].address, this->users[j].port);
 			}
-		}		
+		}
 	}
 }
 
@@ -74,6 +81,8 @@ void Server::receiving()
 			packet>>base_position.x>>base_position.y;
 			this->bases.push_back(Base(base_position));
 			this->new_players +=1;
+			cout<<endl<<"User connected from: "<<address;
+			cout.flush();
 		} else {
 			int userID = this->getUserID(address);
 			this->users[userID].packet = packet;
@@ -82,7 +91,7 @@ void Server::receiving()
 				if(this->type == UPDATE_MINION) {
 					Vector2f	minion_position;
 					packet>>minion_position.x>>minion_position.y;
-					minion_positions.push_back(minion_position);	
+					minion_positions.push_back(minion_position);
 				} else if(this->type == ADD_MINION) {
 					Vector2f 	position;
 					int			health;

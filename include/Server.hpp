@@ -37,7 +37,7 @@ private:
 	sf::UdpSocket							receivingSocket;
 	sf::Thread								sendingThread;
 	sf::Thread								receivingThread;
-	unsigned int							type;
+	unsigned short							type;
 
 	bool 									running;
 	
