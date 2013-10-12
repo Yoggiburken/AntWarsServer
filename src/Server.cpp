@@ -15,22 +15,40 @@ void Server::sending()
 {
 	while(this->running)
 	{
+		//send data to newly connected players
 		if(this->new_players > 0) {
 			Packet packet;
 			for(int i=0; i<this->bases.size(); i++) {
 				Vector2f	base_position 	= this->bases[i].getPosition();
 				int 		health			= this->bases[i].getHealth();
 				packet<<ADD_PLAYER<<base_position.x<<base_position.y<<health;
-				for(int j=0; j<minions[i].size(); j++) {
-					Vector2f 	minion_position = this->minions[i][j].getPosition();
-					int			health			= this->minions[i][j].getHealth();
-					packet<<ADD_MINION<<minion_position.x<<minion_position.y<<health;
+				for(int j=0; j<squads[i].size(); j++) {
+					Vector2f squad_position = this->squads[i][j].getPosition();
+					packet<<ADD_SQUAD<<squad_position.x<<squad_position.y;
+					for(int k=0; k<squads[i][j].squad.size(); k++) {
+						Vector2f 	minion_position = this->squads[i][j].squad[k].getPosition();
+						int			health			= this->squads[i][j].squad[k].getHealth();
+						packet<<ADD_MINION<<minion_position.x<<minion_position.y<<health;
+					}
+				}
+				while(this->new_players > 0)
+				{
+					User user = this->users[this->users.size()-this->new_players];
+					sendingSocket.send(packet, user.address, user.port);
+					this->new_players--;
 				}
 			}
-		}
-		for(int i=0; i<this->users.size(); i++) {
-			sendingSocket.send(this->users[i].packet, this->users[i].address, this->users[i].port);
-		}
+		
+		//relay data to all other users
+			for(int i=0; i<this->users.size(); i++) {
+				for(int j=0; j<this->users.size(); j++) {
+					if(j == i) {
+						continue;
+					}
+					sendingSocket.send(this->users[i].packet, this->users[j].address, this->users[j].port);
+				}
+			}
+		}		
 	}
 }
 
@@ -69,29 +87,47 @@ void Server::receiving()
 					Vector2f 	position;
 					int			health;
 					int			damage;
+					int 		squadID;
 
-					packet>>position.x>>position.y>>health>>damage;
+					packet>>squadID>>position.x>>position.y>>health>>damage;
 
-					this->minions[userID].push_back(Minion(position, health, damage));
+					this->squads[userID][squadID].squad.push_back(Minion(position, health, damage));
 				} else if(this->type == REMOVE_MINION) {
+					int squadID;
 					int minionID;
-					packet>>minionID;
-					this->minions[userID].erase(minions[userID].begin()+minionID);
+					
+					packet>>squadID>>minionID;
+					
+					//erase minion from squad
+					this->squads[userID][squadID].removeMinion(minionID);
+					//erase the squad if it is empty
+					if(this->squads[userID][squadID].isEmpty()) {
+						this->squads[userID].erase(this->squads[userID].begin()+squadID);
+					}
 				} else if(this->type == UPDATE_BASE) {
 					int health;
+					
 					packet>>health;
+					
 					this->bases[userID].setHealth(health);
 				} else if(this->type == REMOVE_PLAYER) {
+					//erase playerdata
 					this->bases.erase(this->bases.begin()+userID);
-					this->minions.erase(this->minions.begin()+userID);
+					this->squads.erase(this->squads.begin()+userID);
+					this->users.erase(this->users.begin()+userID);
 				} else if(this->type == ATTACK_MINION) {
+					int squadID;
 					int minionID;
 					int damage;
-					packet>>minionID>>damage;
-					this->minions[userID][minionID].attacked(damage);
+					
+					packet>>squadID>>minionID>>damage;
+					
+					this->squads[userID][squadID].squad[minionID].attacked(damage);
 				} else if(this->type == ATTACK_BASE) {
 					int damage;
+					
 					packet>>damage;
+					
 					this->bases[userID].attacked(damage);
 				}
 			}
